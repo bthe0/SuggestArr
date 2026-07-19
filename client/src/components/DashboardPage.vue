@@ -340,6 +340,7 @@ import SettingsDatabase from './settings/SettingsDatabase.vue';
 import SettingsAdvanced from './settings/SettingsAdvanced.vue';
 import SettingsRequests from './settings/SettingsRequests.vue';
 import SettingsJobs from './settings/SettingsJobs.vue';
+import SettingsLists from './settings/SettingsLists.vue';
 import AiSearchPage from './settings/AiSearchPage.vue';
 import SettingsCleanup from './settings/SettingsCleanup.vue';
 import LogsComponent from './LogsComponent.vue';
@@ -359,6 +360,7 @@ export default {
     SettingsAdvanced,
     SettingsRequests,
     SettingsJobs,
+    SettingsLists,
     AiSearchPage,
     SettingsCleanup,
     LogsComponent,
@@ -417,6 +419,7 @@ export default {
         { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic',       isBeta: true,           tourId: 'tab-ai-search' },
         { id: 'services',  name: 'Services',  icon: 'fas fa-plug',         tourId: 'tab-services', adminOnly: true },
         { id: 'jobs',      name: 'Jobs',       icon: 'fas fa-briefcase',   tourId: 'tab-jobs' },
+        { id: 'lists',     name: 'Lists',      icon: 'fas fa-list-ul',     tourId: 'tab-lists', adminOnly: true },
         { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database', adminOnly: true },
         { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced', adminOnly: true },
         { id: 'cleanup',   name: 'Cleanup',   icon: 'fas fa-broom',       tourId: 'tab-cleanup', adminOnly: true },
@@ -521,6 +524,7 @@ export default {
         requests: 'SettingsRequests',
         services: 'SettingsServices',
         jobs: 'SettingsJobs',
+        lists: 'SettingsLists',
         database: 'SettingsDatabase',
         advanced: 'SettingsAdvanced',
         logs: 'LogsComponent',

@@ -233,6 +233,9 @@ def get_default_values():
         'AUTH_MODE': lambda: 'enabled',
         'AUTH_TRUSTED_CIDRS': lambda: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7',
         'AUTH_BYPASS_USERNAME': lambda: 'local_admin',
+        # Monitored-list ingestion (Trakt/Letterboxd)
+        'TRAKT_CLIENT_ID': lambda: '',
+        'FLARESOLVERR_URL': lambda: 'http://flaresolverr:8191/v1',
     }
 
 def get_config_values():

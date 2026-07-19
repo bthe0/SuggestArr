@@ -12,6 +12,7 @@ Covers:
 - PlexAuth.check_authentication(): token found, not found
 """
 
+import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -33,14 +34,19 @@ def _mock_json_response(status=200, data=None):
     resp.status = status
     resp.reason = 'OK' if status == 200 else 'Error'
     resp.json = AsyncMock(return_value=data or {})
+    # _make_request now reads the body via .text() and json.loads() it.
+    resp.text = AsyncMock(return_value=json.dumps(data or {}))
     resp.__aenter__ = AsyncMock(return_value=resp)
     resp.__aexit__ = AsyncMock(return_value=False)
     return resp
 
 
 def _mock_session(response=None):
+    resp = response or _mock_json_response()
     session = MagicMock()
-    session.get = MagicMock(return_value=response or _mock_json_response())
+    # _make_request dispatches via session.request(method, url).
+    session.request = MagicMock(return_value=resp)
+    session.get = MagicMock(return_value=resp)
     return session
 
 
@@ -70,14 +76,14 @@ class TestPlexBaseClientMakeRequest(unittest.IsolatedAsyncioTestCase):
 
     async def test_raises_plex_connection_error_on_client_error(self):
         session = MagicMock()
-        session.get = MagicMock(side_effect=aiohttp.ClientError('refused'))
+        session.request = MagicMock(side_effect=aiohttp.ClientError('refused'))
         with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
             with self.assertRaises(PlexConnectionError):
                 await self.client._make_request('http://plex.local/library/sections')
 
     async def test_raises_plex_connection_error_on_generic_exception(self):
         session = MagicMock()
-        session.get = MagicMock(side_effect=RuntimeError('oops'))
+        session.request = MagicMock(side_effect=RuntimeError('oops'))
         with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
             with self.assertRaises(PlexConnectionError):
                 await self.client._make_request('http://plex.local/library/sections')
@@ -93,7 +99,16 @@ class TestPlexLibraryServiceGetLibraries(unittest.IsolatedAsyncioTestCase):
         self.service = PlexLibraryService(token='tok', api_url='http://plex.local')
 
     async def test_returns_directory_list_on_success(self):
-        dirs = [{'key': '1', 'title': 'Movies', 'type': 'movie'}]
+        # Real Plex nests Directory under MediaContainer.
+        dirs = [{'key': '6', 'title': 'Movies', 'type': 'movie'}]
+        with patch.object(self.service, '_make_request',
+                          AsyncMock(return_value={'MediaContainer': {'Directory': dirs}})):
+            result = await self.service.get_libraries()
+        self.assertEqual(result, dirs)
+
+    async def test_returns_directory_list_flat_shape(self):
+        # Back-compat: also accept a flat {Directory: [...]} payload.
+        dirs = [{'key': '6', 'title': 'Movies', 'type': 'movie'}]
         with patch.object(self.service, '_make_request', AsyncMock(return_value={'Directory': dirs})):
             result = await self.service.get_libraries()
         self.assertEqual(result, dirs)
@@ -119,8 +134,10 @@ class TestPlexLibraryServiceGetLibraryItems(unittest.IsolatedAsyncioTestCase):
         self.service = PlexLibraryService(token='tok', api_url='http://plex.local')
 
     async def test_returns_metadata_items_on_success(self):
+        # Real Plex nests Metadata under MediaContainer.
         items = [{'title': 'Inception', 'type': 'movie'}]
-        with patch.object(self.service, '_make_request', AsyncMock(return_value={'Metadata': items})):
+        with patch.object(self.service, '_make_request',
+                          AsyncMock(return_value={'MediaContainer': {'Metadata': items}})):
             result = await self.service.get_library_items('1')
         self.assertEqual(result, items)
 

@@ -2,6 +2,7 @@
 Plex API client base class with common HTTP functionality.
 """
 import asyncio
+import json
 import aiohttp
 from typing import Optional, Dict, Any
 
@@ -41,29 +42,42 @@ class PlexBaseClient:
             self.session = aiohttp.ClientSession(headers=headers, timeout=timeout)
         return self.session
     
-    async def _make_request(self, url: str) -> Dict[str, Any]:
+    async def _make_request(self, url: str, method: str = 'GET') -> Dict[str, Any]:
         """
-        Make HTTP GET request to Plex API.
-        
+        Make an HTTP request to the Plex API.
+
         Args:
-            url: Full URL to request
-            
+            url: Full URL to request (query params included).
+            method: HTTP method ('GET', 'POST', 'PUT', 'DELETE').
+
         Returns:
-            JSON response data
-            
+            Parsed JSON response, or an empty dict for empty/non-JSON bodies
+            (Plex returns no body for many POST/PUT/DELETE mutations).
+
         Raises:
-            PlexConnectionError: If request fails
+            PlexConnectionError: If the request fails or returns a non-2xx status.
         """
         try:
             session = await self._get_session()
-            async with session.get(url) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    error_msg = f"HTTP {response.status}: {response.reason}"
-                    self.logger.error(f"Plex API request failed: {error_msg}")
-                    raise PlexConnectionError(error_msg)
-                    
+            async with session.request(method, url) as response:
+                if 200 <= response.status < 300:
+                    body = await response.text()
+                    if not body.strip():
+                        return {}
+                    try:
+                        return json.loads(body)
+                    except (ValueError, json.JSONDecodeError):
+                        self.logger.debug(
+                            "Non-JSON Plex response for %s %s; returning empty dict",
+                            method, response.status,
+                        )
+                        return {}
+                error_msg = f"HTTP {response.status}: {response.reason}"
+                self.logger.error(f"Plex API request failed: {error_msg}")
+                raise PlexConnectionError(error_msg)
+
+        except PlexConnectionError:
+            raise
         except aiohttp.ClientError as e:
             error_msg = f"Network error: {str(e)}"
             self.logger.error(f"Plex connection failed: {error_msg}")

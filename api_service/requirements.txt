@@ -31,3 +31,5 @@ mysql-connector-python==9.6.0
 psycopg2-binary==2.9.11
 
 openai==2.26.0
+
+fastmcp==3.2.4

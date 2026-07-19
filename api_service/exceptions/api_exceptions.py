@@ -62,5 +62,11 @@ class SeerClientError(APIClientError):
         super().__init__(message, "Seer")
 
 
+class ListFetchError(APIClientError):
+    """Raised when a monitored list (Trakt/Letterboxd) cannot be fetched or parsed."""
+    def __init__(self, message, service_name="List"):
+        super().__init__(message, service_name)
+
+
 class LLMValidationError(Exception):
     """Raised when the LLM response fails Pydantic validation after all retries."""

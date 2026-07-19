@@ -33,6 +33,7 @@ from api_service.blueprints.health.routes import health_bp
 from api_service.blueprints.admin.routes import admin_bp
 from api_service.blueprints.users.routes import users_bp
 from api_service.blueprints.cleanup.routes import cleanup_bp
+from api_service.blueprints.lists.routes import lists_bp
 
 class SubpathMiddleware:
     """
@@ -185,6 +186,7 @@ def create_app():
     application.register_blueprint(admin_bp, url_prefix='/api/admin')
     application.register_blueprint(users_bp, url_prefix='/api/users')
     application.register_blueprint(cleanup_bp, url_prefix='/api/cleanup')
+    application.register_blueprint(lists_bp, url_prefix='/api/lists')
 
     # Register routes
     register_routes(application)

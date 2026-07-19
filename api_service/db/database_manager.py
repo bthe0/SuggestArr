@@ -316,6 +316,38 @@ class DatabaseManager:
                     config_json TEXT NOT NULL,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
+            """,
+            'monitored_lists': """
+                CREATE TABLE IF NOT EXISTS monitored_lists (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    media_type TEXT,
+                    quality TEXT,
+                    collection_enabled INTEGER NOT NULL DEFAULT 1,
+                    sync_interval_hours INTEGER NOT NULL DEFAULT 24,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    collection_id TEXT,
+                    last_synced_at TIMESTAMP,
+                    last_status TEXT,
+                    last_summary TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source, url)
+                )
+            """,
+            'monitored_list_items': """
+                CREATE TABLE IF NOT EXISTS monitored_list_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    list_id INTEGER NOT NULL,
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    requested INTEGER NOT NULL DEFAULT 0,
+                    first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(list_id, tmdb_id, media_type),
+                    FOREIGN KEY (list_id) REFERENCES monitored_lists(id) ON DELETE CASCADE
+                )
             """
         }
         
@@ -343,6 +375,16 @@ class DatabaseManager:
                             query = query.replace(
                                 "UNIQUE(tmdb_id, media_type)",
                                 "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
+                            )
+                        elif table_name == 'monitored_lists':
+                            query = query.replace(
+                                "UNIQUE(source, url)",
+                                "UNIQUE KEY uniq_monitored_source_url (source(191), url(191))"
+                            )
+                        elif table_name == 'monitored_list_items':
+                            query = query.replace(
+                                "UNIQUE(list_id, tmdb_id, media_type)",
+                                "UNIQUE KEY uniq_list_item (list_id, tmdb_id(128), media_type(64))"
                             )
 
                         # Order matters: do specific replacements first

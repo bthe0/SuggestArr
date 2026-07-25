@@ -335,7 +335,34 @@ try:
         max_instances=1,
         replace_existing=True,
     )
-    logger.info("Jobs scheduler initialized (discover + recommendation + queue_worker + cleanup)")
+    # Monitored-list sync. Runs hourly and lets each list's own
+    # sync_interval_hours decide whether it is actually due — that column was
+    # persisted but never read, so lists only ever synced when someone clicked
+    # the button in the UI.
+    def _run_list_sync_job():
+        import asyncio as _asyncio
+        try:
+            from api_service.services.lists.list_service import ListService
+            result = _asyncio.run(ListService().sync_due())
+            if result.get("synced") or result.get("failed"):
+                logger.info(
+                    "List sync: %d synced, %d failed, %d not due",
+                    len(result.get("synced", [])),
+                    len(result.get("failed", [])),
+                    len(result.get("skipped", [])),
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"List sync job error: {exc}")
+
+    job_manager.scheduler.add_job(
+        _run_list_sync_job,
+        'interval',
+        hours=1,
+        id='list_sync_due',
+        max_instances=1,
+        replace_existing=True,
+    )
+    logger.info("Jobs scheduler initialized (discover + recommendation + queue_worker + cleanup + list_sync)")
 except Exception as e:
     import traceback
     logger.error(f"Failed to initialize discover jobs scheduler: {e}")

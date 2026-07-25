@@ -14,8 +14,11 @@ challenge, or the list page cannot be parsed, a :class:`ListFetchError` is raise
 loudly rather than returning an empty list.  Trakt has no such requirement.
 
 .. note::
-   Only the first list page (up to 100 films) is fetched — more than the 50-item
-   per-sync guardrail applied downstream, so pagination is unnecessary here.
+   All list pages are fetched (Letterboxd paginates at 100 films per page).
+   Fetching only page 1 silently truncated every list longer than 100. The
+   per-sync 50-item cap does NOT make pagination unnecessary: that cap is per
+   run, while the fetch limit was permanent, so films 101+ could never be seen
+   on any sync, ever.
 """
 
 import html as _html
@@ -57,6 +60,11 @@ class LetterboxdListClient(BaseHTTPClient):
         self.flaresolverr_url = (flaresolverr_url or "").strip() or None
         self.max_timeout_ms = max_timeout_ms
 
+    #: Films per Letterboxd list page.
+    PAGE_SIZE = 100
+    #: Hard bound on pages walked — each page is a full FlareSolverr fetch.
+    MAX_PAGES = 20
+
     @staticmethod
     def list_page_url(url: str) -> str:
         """Return the canonical list-page URL (strips query/fragment/legacy rss)."""
@@ -79,8 +87,7 @@ class LetterboxdListClient(BaseHTTPClient):
                 "FLARESOLVERR_URL is not configured.",
                 "Letterboxd",
             )
-        html_text = await self._fetch_via_flaresolverr(url)
-        names = self._parse_item_names(html_text)
+        names = await self._fetch_all_pages(url)
         if not names:
             raise ListFetchError(
                 "No films parsed from the Letterboxd list page — the list may be "
@@ -88,6 +95,45 @@ class LetterboxdListClient(BaseHTTPClient):
                 "Letterboxd",
             )
         return await self._resolve(names)
+
+    async def _fetch_all_pages(self, url):
+        """Walk every page of the list in order, de-duplicating as we go.
+
+        Letterboxd paginates at 100 films per page (``/page/2/`` and so on).
+        Stop at the first page that yields no films, or that yields nothing new
+        — a list whose length is an exact multiple of the page size serves the
+        last page again rather than 404ing, which would otherwise loop.
+
+        A later page failing ends the walk with what we already have; only page 1
+        failing is fatal. Losing the tail of a list beats losing all of it.
+        """
+        base = self.list_page_url(url).rstrip("/")
+        seen = set()
+        names = []
+
+        for page in range(1, self.MAX_PAGES + 1):
+            page_url = base if page == 1 else "{0}/page/{1}/".format(base, page)
+            try:
+                html_text = await self._fetch_via_flaresolverr(page_url)
+            except ListFetchError:
+                if page == 1:
+                    raise
+                break
+
+            parsed = self._parse_item_names(html_text)
+            if not parsed:
+                break
+
+            fresh = [n for n in parsed if n not in seen]
+            if not fresh:
+                break
+            seen.update(fresh)
+            names.extend(fresh)
+
+            if len(parsed) < self.PAGE_SIZE:
+                break
+
+        return names
 
     async def _fetch_via_flaresolverr(self, url: str) -> str:
         """POST the list-page URL to FlareSolverr and return the solved HTML."""

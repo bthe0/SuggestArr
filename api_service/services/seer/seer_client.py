@@ -291,7 +291,12 @@ class SeerClient(BaseHTTPClient):
 
         :return: payload dict ready for JSON serialisation.
         """
-        data = {"mediaType": media_type, "mediaId": media['id']}
+        # Seer's schema requires mediaId to be a NUMBER. The list-sync path
+        # carries tmdb ids as strings (Letterboxd/Trakt resolvers stringify them),
+        # and passing one straight through produced a 400 on every single
+        # list-sourced request: "request/body/mediaId must be number". Coerce
+        # here so every caller is safe regardless of what it holds.
+        data = {"mediaType": media_type, "mediaId": int(media['id'])}
 
         if media_type == 'tv':
             data["seasons"] = self._resolve_tv_seasons()
@@ -375,6 +380,19 @@ class SeerClient(BaseHTTPClient):
         """
         # Build clean Seer body (drop private meta-keys)
         data = {k: v for k, v in payload.items() if not k.startswith('_')}
+        # Rows enqueued before the id was coerced carry mediaId as a string, and
+        # Seer rejects those with "request/body/mediaId must be number". This is
+        # the outbound boundary, so normalise here rather than trusting whatever
+        # was persisted — it also covers rows written by older builds.
+        if data.get('mediaId') is not None:
+            try:
+                data['mediaId'] = int(data['mediaId'])
+            except (TypeError, ValueError):
+                self.logger.error(
+                    "Queued request has a non-numeric mediaId carried as a string: %r",
+                    data.get('mediaId'),
+                )
+                return False
         media_type = data.get('mediaType', 'unknown')
         media_id = data.get('mediaId')
 

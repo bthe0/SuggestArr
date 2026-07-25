@@ -87,6 +87,49 @@ class ListService:
     # ------------------------------------------------------------------
     # Sync
     # ------------------------------------------------------------------
+    async def sync_due(self) -> dict[str, Any]:
+        """Sync every monitored list whose interval has elapsed.
+
+        Each row carries its own ``sync_interval_hours``; a list that has never
+        synced (no ``last_synced_at``) is always due. One list failing must not
+        stop the others — an unreachable Letterboxd or a FlareSolverr hiccup
+        should not strand every other list behind it.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        results: dict[str, Any] = {"synced": [], "skipped": [], "failed": []}
+
+        for row in self.list_all():
+            list_id = row.get("id")
+            interval = row.get("sync_interval_hours") or 24
+            last = row.get("last_synced_at")
+
+            due = True
+            if last:
+                try:
+                    prev = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
+                    if prev.tzinfo is None:
+                        prev = prev.replace(tzinfo=timezone.utc)
+                    due = now - prev >= timedelta(hours=float(interval))
+                except (ValueError, TypeError):
+                    # Unparseable timestamp: treat as due rather than stranding
+                    # the list forever behind a bad value.
+                    due = True
+
+            if not due:
+                results["skipped"].append(list_id)
+                continue
+
+            try:
+                summary = await self.sync_list(list_id)
+                results["synced"].append({"id": list_id, "summary": summary})
+            except Exception as exc:  # noqa: BLE001
+                self.logger.error("Scheduled sync failed for list %s: %s", list_id, exc, exc_info=True)
+                results["failed"].append({"id": list_id, "error": str(exc)})
+
+        return results
+
     async def sync_list(self, list_id: int) -> dict[str, Any]:
         """Fetch and request the items of one monitored list.
 

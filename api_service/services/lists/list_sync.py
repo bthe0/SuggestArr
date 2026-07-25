@@ -1,3 +1,4 @@
+import os
 """Synchronise monitored Trakt/Letterboxd lists into Jellyseerr requests.
 
 For each monitored list this service:
@@ -17,7 +18,13 @@ from collections.abc import Iterable
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.api_exceptions import ListFetchError
 
-DEFAULT_MAX_ITEMS = 50
+#: Per-list, per-sync ceiling. Overridable with LIST_SYNC_MAX_ITEMS.
+#:
+#: This is a runaway guard, NOT indexer protection — Radarr queues and
+#: paces its own searches, so a lower value here does not reduce indexer
+#: load, it only stretches the same work across more syncs. 50 made a
+#: 250-film list take days.
+DEFAULT_MAX_ITEMS = int(os.environ.get('LIST_SYNC_MAX_ITEMS', '500'))
 _SUPPORTED_SOURCES = ("trakt", "letterboxd")
 
 
@@ -111,8 +118,20 @@ class ListSyncService:
             filtered.append((str(tmdb_id), media_type))
 
         # Guardrail: cap items processed per sync per list.
-        summary["capped"] = len(filtered) > self.max_items
-        capped = filtered[: self.max_items]
+        #
+        # ⚠️ Order matters, and the previous order was a permanent-truncation bug:
+        # capping BEFORE consulting the dedup set meant every run took the same
+        # first N items, and anything past N was unreachable on every future sync
+        # rather than merely deferred. Dropping already-seen items first makes the
+        # cap a genuine per-run throttle — each sync advances through the list.
+        unseen = [
+            (tmdb_id, media_type)
+            for tmdb_id, media_type in filtered
+            if (media_type, tmdb_id) not in already
+        ]
+        summary["skipped_dedup"] = len(filtered) - len(unseen)
+        summary["capped"] = len(unseen) > self.max_items
+        capped = unseen[: self.max_items]
 
         rationale = f"Added from {source} list '{name}' ({url})"
 
@@ -124,7 +143,8 @@ class ListSyncService:
             key = (media_type, tmdb_id)
 
             if key in already:
-                summary["skipped_dedup"] += 1
+                # already-seen items are dropped BEFORE the cap above; this is a
+                # belt-and-braces guard and must not double-count the summary.
                 continue
 
             try:

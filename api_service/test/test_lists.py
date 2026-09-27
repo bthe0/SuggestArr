@@ -419,6 +419,7 @@ class TestListSync(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(summary["skipped_dedup"], 1)
         self.assertEqual(summary["requested"], 1)
+        self.assertEqual([m["tmdb_id"] for m in summary["media_ids"]], ["603", "1396"])
         self.assertEqual(seer.request_media.await_count, 1)
 
     async def test_media_type_filter(self):
@@ -441,7 +442,8 @@ class TestListSync(unittest.IsolatedAsyncioTestCase):
         summary = await svc.sync_list({"source": "trakt", "url": "u", "name": "L"})
         self.assertTrue(summary["capped"])
         self.assertEqual(summary["requested"], 2)
-        self.assertEqual(len(summary["media_ids"]), 2)
+        self.assertEqual([m["tmdb_id"] for m in summary["media_ids"]], ["0", "1", "2", "3", "4"])
+        self.assertEqual(seer.request_media.await_count, 2)
 
     async def test_seer_returns_false_counts_membership_not_request(self):
         seer = _seer(False)  # duplicate at seer layer

@@ -103,7 +103,7 @@ class ListSyncService:
             "capped": False,
             "errors": 0,
             "requested_ids": [],   # newly enqueued this run
-            "media_ids": [],       # full in-cap membership (for Plex collection)
+            "media_ids": [],
         }
 
         items = await self._fetch_items(source, url)
@@ -116,6 +116,10 @@ class ListSyncService:
                 summary["skipped_media_type"] += 1
                 continue
             filtered.append((str(tmdb_id), media_type))
+        summary["media_ids"] = [
+            {"tmdb_id": tmdb_id, "media_type": media_type}
+            for tmdb_id, media_type in filtered
+        ]
 
         # Guardrail: cap items processed per sync per list.
         #
@@ -139,7 +143,6 @@ class ListSyncService:
         # stored on the monitored_lists row but not yet passed through to
         # Seer/Radarr here (needs a quality->profileId mapping decision).
         for tmdb_id, media_type in capped:
-            summary["media_ids"].append({"tmdb_id": tmdb_id, "media_type": media_type})
             key = (media_type, tmdb_id)
 
             if key in already:

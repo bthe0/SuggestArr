@@ -259,7 +259,7 @@ class ListService:
         token = env.get("PLEX_TOKEN")
         if not api_url or not token:
             return None
-        return PlexLibraryService(token=token, api_url=api_url)
+        return PlexLibraryService(token=token, api_url=api_url, request_timeout=30)
 
     # ------------------------------------------------------------------
     # Client construction

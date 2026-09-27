@@ -361,6 +361,16 @@ class TestLetterboxdResolve(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ListFetchError):
             await client.fetch_list("https://letterboxd.com/u/list/slug/")
 
+    async def test_not_found_page_with_challenge_script_reports_not_found(self):
+        client = _lb_client()
+        client._get_session = AsyncMock(return_value=_session_post_returning(
+            _mock_json_response(200, _fs_envelope(
+                '<html><title>Letterboxd - Not Found</title>'
+                '<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script></html>'))
+        ))
+        with self.assertRaisesRegex(ListFetchError, "list not found"):
+            await client.fetch_list("https://letterboxd.com/u/list/slug/")
+
     async def test_flaresolverr_unreachable_raises(self):
         client = _lb_client()
         session = MagicMock()

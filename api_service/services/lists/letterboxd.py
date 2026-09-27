@@ -182,13 +182,13 @@ class LetterboxdListClient(BaseHTTPClient):
             )
 
         head = html_text[:4000].lower()
+        if any(marker in head for marker in _NOTFOUND_MARKERS):
+            raise ListFetchError(f"Letterboxd list not found: {page_url}", "Letterboxd")
         if any(marker in head for marker in _CHALLENGE_MARKERS):
             raise ListFetchError(
                 "Letterboxd Cloudflare challenge persisted through FlareSolverr.",
                 "Letterboxd",
             )
-        if any(marker in head for marker in _NOTFOUND_MARKERS):
-            raise ListFetchError(f"Letterboxd list not found: {page_url}", "Letterboxd")
         return html_text
 
     @classmethod
